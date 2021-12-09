@@ -4,12 +4,36 @@ var game_status={};
 $(function () {
 	draw_empty_board();
 	fill_board();
-
+    $('#do_move').click( do_move);
 	$('#chess_login').click( login_to_game);
-
-
+	$('#chess_reset').click( reset_board);
+	$('#move_div').hide();
+	game_status_update();
 });
 
+
+function do_move() {
+	var s = $('#the_move').val();
+	
+	var a = s.trim().split(/[ ]+/);
+	if(a.length!=4) {
+		alert('Must give 4 numbers');
+		return;
+	}
+	$.ajax({url: "chess.php/board/piece/"+a[0]+'/'+a[1], 
+			method: 'PUT',
+			dataType: "json",
+			contentType: 'application/json',
+			data: JSON.stringify( {x: a[2], y: a[3]}),
+			success: move_result,
+			error: login_error});
+	
+}
+
+
+function move_result(data){
+	
+}
 
 function draw_empty_board(p) {
 	if(p!='B') {p='W';}
