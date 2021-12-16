@@ -1,6 +1,18 @@
 <?php
 
-  
+
+function show_piece($x,$y) {
+	global $mysqli;
+	
+	$sql = 'select * from board where x=? and y=?';
+	$st = $mysqli->prepare($sql);
+	$st->bind_param('ii',$x,$y);
+	$st->execute();
+	$res = $st->get_result();
+	header('Content-type: application/json');
+	print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT);
+}
+   
 function move_piece($x,$y,$x2,$y2,$token) {
 	
 	if($token==null || $token=='') {
@@ -29,7 +41,6 @@ function move_piece($x,$y,$x2,$y2,$token) {
 	$orig_board=read_board();
 	$board=convert_board($orig_board);
 	$n = add_valid_moves_to_piece($board,$color,$x,$y);
-	
 	if($n==0) {
 		header("HTTP/1.1 400 Bad Request");
 		print json_encode(['errormesg'=>"This piece cannot move."]);
@@ -45,27 +56,7 @@ function move_piece($x,$y,$x2,$y2,$token) {
 	print json_encode(['errormesg'=>"This move is illegal."]);
 	exit;
 }
-function do_move($x,$y,$x2,$y2) {
-	global $mysqli;
-	$sql = 'call `move_piece`(?,?,?,?);';
-	$st = $mysqli->prepare($sql);
-	$st->bind_param('iiii',$x,$y,$x2,$y2 );
-	$st->execute();
-
-	header('Content-type: application/json');
-	print json_encode(read_board(), JSON_PRETTY_PRINT);
-}
-function show_piece($x,$y) {
-	global $mysqli;
-	
-	$sql = 'select * from board where x=? and y=?';
-	$st = $mysqli->prepare($sql);
-	$st->bind_param('ii',$x,$y);
-	$st->execute();
-	$res = $st->get_result();
-	header('Content-type: application/json');
-	print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT);
-}
+		
 function show_board($input) {
 	global $mysqli;
 	
@@ -77,6 +68,30 @@ function show_board($input) {
 		print json_encode(read_board(), JSON_PRETTY_PRINT);
 	}
 }
+
+function reset_board() {
+	global $mysqli;
+	$sql = 'call clean_board()';
+	$mysqli->query($sql);
+}
+
+function read_board() {
+	global $mysqli;
+	$sql = 'select * from board';
+	$st = $mysqli->prepare($sql);
+	$st->execute();
+	$res = $st->get_result();
+	return($res->fetch_all(MYSQLI_ASSOC));
+}
+
+function convert_board(&$orig_board) {
+	$board=[];
+	foreach($orig_board as $i=>&$row) {
+		$board[$row['x']][$row['y']] = &$row;
+	} 
+	return($board);
+}
+
 function show_board_by_player($b) {
 
 	global $mysqli;
@@ -95,7 +110,6 @@ function show_board_by_player($b) {
 	print json_encode($orig_board, JSON_PRETTY_PRINT);
 }
 
-
 function add_valid_moves_to_board(&$board,$b) {
 	$number_of_moves=0;
 	
@@ -106,8 +120,6 @@ function add_valid_moves_to_board(&$board,$b) {
 	}
 	return($number_of_moves);
 }
-
-
 
 function add_valid_moves_to_piece(&$board,$b,$x,$y) {
 	$number_of_moves=0;
@@ -124,14 +136,86 @@ function add_valid_moves_to_piece(&$board,$b,$x,$y) {
 	return($number_of_moves);
 }
 
-
 function king_moves(&$board,$b,$x,$y) {
-	return(0);
+	$directions = [
+		[1,0],
+		[-1,0],
+		[0,1],
+		[0,-1],
+		[1,1],
+		[-1,1],
+		[1,-1],
+		[-1,-1]
+	];	
+	$moves=[];
+	foreach($directions as $d=>$direction) {
+		$i=$x+$direction[0];
+		$j=$y+$direction[1];
+		if ( $i>=1 && $i<=8 && $j>=1 && $j<=8 && $board[$i][$j]['piece_color'] != $b) {
+			$move=['x'=>$i, 'y'=>$j];
+			$moves[]=$move;
+		}
+	}
+	$board[$x][$y]['moves'] = $moves;
+	return(sizeof($moves));
 }
-function queen_moves(&$board,$b,$x,$y) {return(0);}
-function rook_moves(&$board,$b,$x,$y) {return(0);}
+function queen_moves(&$board,$b,$x,$y) {
+	$directions = [
+		[1,0],
+		[-1,0],
+		[0,1],
+		[0,-1],
+		[1,1],
+		[-1,1],
+		[1,-1],
+		[-1,-1]
+	];	
+	return(bishop_rook_queen_moves($board,$b,$x,$y,$directions));
 
-function bishop_moves(&$board,$b,$x,$y) {return(0);}
+}
+function rook_moves(&$board,$b,$x,$y) {
+	$directions = [
+		[1,0],
+		[-1,0],
+		[0,1],
+		[0,-1]
+	];	
+	return(bishop_rook_queen_moves($board,$b,$x,$y,$directions));
+}
+function bishop_moves(&$board,$b,$x,$y) {
+	$directions = [
+		[1,1],
+		[-1,1],
+		[1,-1],
+		[-1,-1]
+	];	
+	return(bishop_rook_queen_moves($board,$b,$x,$y,$directions));
+}
+
+function bishop_rook_queen_moves(&$board,$b,$x,$y,$directions) {
+	$moves=[];
+
+	foreach($directions as $d=>$direction) {
+		for($i=$x+$direction[0],$j=$y+$direction[1]; $i>=1 && $i<=8 && $j>=1 && $j<=8; $i+=$direction[0], $j+=$direction[1]) {
+			if( $board[$i][$j]['piece_color'] == null ){ 
+				$move=['x'=>$i, 'y'=>$j];
+				$moves[]=$move;
+			} else if ( $board[$i][$j]['piece_color'] != $b) {
+				$move=['x'=>$i, 'y'=>$j];
+				$moves[]=$move;
+				// Υπάρχει πιόνι αντιπάλου... Δεν πάμε παραπέρα.
+				break;
+			} else if ( $board[$i][$j]['piece_color'] == $b) {
+				break;
+			}
+		}
+
+	}
+	$board[$x][$y]['moves'] = $moves;
+	return(sizeof($moves));
+}
+
+
 
 function knight_moves(&$board,$b,$x,$y) {
 	$m = [
@@ -165,42 +249,40 @@ function pawn_moves(&$board,$b,$x,$y) {
 	$start_row = ($b=='W')?2:7;
 	$moves=[];
 	
-	if($board[$x][$y+$direction]['piece_color']==null) {
-		$move=['x'=>$x, 'y'=>$y+$direction];
+	$j=$y+$direction;
+	if($j<=8 && $j>=1 && $board[$x][$j]['piece_color']==null) {
+		$move=['x'=>$x, 'y'=>$j];
 		$moves[]=$move;
-		if($y==$start_row && $board[$x][$y+2*$direction]['piece_color']==null) {
-			$move=['x'=>$x, 'y'=>$y+2*$direction];
+		$j=$y+2*$direction;
+		if($j<=8 && $j>=1 && $y==$start_row && $board[$x][$j]['piece_color']==null) {
+			$move=['x'=>$x, 'y'=>$j];
 			$moves[]=$move;
 		}
 	}
+	$j=$y+$direction;
+	if($j>=1 && $j<=8) {
+		for($i=$x-1;$i<=$x+1;$i+=2) {
+			if($i>=1 && $i<=8 && $board[$i][$j]['piece_color']!=null && $board[$i][$j]['piece_color']!=$b) {
+				$move=['x'=>$i, 'y'=>$j];
+				$moves[]=$move;
+			}
+		}
+	}
+
 	$board[$x][$y]['moves'] = $moves;
 	return(sizeof($moves));
 	
 }
 
-
-function convert_board(&$orig_board) {
-	$board=[];
-	foreach($orig_board as $i=>&$row) {
-		$board[$row['x']][$row['y']] = &$row;
-	} 
-	return($board);
-}
-
-function read_board() {
+function do_move($x,$y,$x2,$y2) {
 	global $mysqli;
-	$sql = 'select * from board';
+	$sql = 'call `move_piece`(?,?,?,?);';
 	$st = $mysqli->prepare($sql);
+	$st->bind_param('iiii',$x,$y,$x2,$y2 );
 	$st->execute();
-	$res = $st->get_result();
-	return($res->fetch_all(MYSQLI_ASSOC));
-}
-function reset_board() {
-	global $mysqli;
-	
-	$sql = 'call clean_board()';
-	$mysqli->query($sql);
-	show_board();
+
+	header('Content-type: application/json');
+	print json_encode(read_board(), JSON_PRETTY_PRINT);
 }
 
 ?>
