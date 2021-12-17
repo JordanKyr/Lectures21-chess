@@ -25,7 +25,7 @@ Table of Contents
 # Demo Page
 
 Μπορείτε να κατεβάσετε τοπικά ή να επισκευτείτε την σελίδα: 
-https://users.iee.ihu.gr/~asidirop/adise/Lectures-Chess5/
+https://users.iee.ihu.gr/~asidirop/adise21/Lectures21-chess/
 
 
 
