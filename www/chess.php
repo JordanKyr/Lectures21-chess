@@ -31,8 +31,7 @@ switch ($r=array_shift($request)) {
                         break;
             case 'piece': handle_piece($method, $request[0],$request[1],$input);
                         break;
-            }
-			default: header("HTTP/1.1 404 Not Found");
+	    default: header("HTTP/1.1 404 Not Found");
                             break;
 			}
             break;
